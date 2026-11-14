@@ -16,13 +16,31 @@ function doGet(e) {
   if (action === 'health') return json_({success:true,service:'ZIET Workshop Resource API',version:1});
   if (action !== 'list') return json_({success:false,message:'Unsupported GET action'});
   const rows = readAll_();
-  // Return deleted records too: connected clients need tombstones to remove stale copies.
-  return json_({success:true,resources:rows});
+  // JSONP supports cross-origin reads from GitHub Pages without exposing credentials.
+  const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
+  const payload = {success:true,resources:rows};
+  if (callback && /^[A-Za-z_$][0-9A-Za-z_$\.]*$/.test(callback)) {
+    return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return json_(payload);
 }
 
 function doPost(e) {
   try {
-    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    let body = {};
+    const raw = (e && e.postData && e.postData.contents) || '';
+    if (raw) {
+      try { body = JSON.parse(raw); }
+      catch (jsonError) {
+        // HTML form POST is used by static GitHub Pages clients to avoid CORS preflight.
+        const encoded = e && e.parameter && e.parameter.payload;
+        if (encoded) body = JSON.parse(encoded);
+        else throw jsonError;
+      }
+    } else if (e && e.parameter && e.parameter.payload) {
+      body = JSON.parse(e.parameter.payload);
+    }
     const action = String(body.action || '').toLowerCase();
     if (action === 'upsert' || action === 'save') {
       const resource = body.resource || body;
