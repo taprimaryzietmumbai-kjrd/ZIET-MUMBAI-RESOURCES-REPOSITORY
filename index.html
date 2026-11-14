@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#153d69">
+<title>ZIET Mumbai | Workshop Resource Repository</title>
+<style>
+:root{--navy:#153d69;--blue:#2466a2;--teal:#0d8279;--ink:#1d2939;--muted:#667085;--line:#dce4ee;--bg:#f4f7fb;--white:#fff;--gold:#e4ad43}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,Segoe UI,Arial,sans-serif}
+header{background:linear-gradient(115deg,#102f52,#1e5a91);color:#fff;padding:26px max(22px,calc((100vw - 1220px)/2));}
+.brandline{display:flex;align-items:center;gap:13px}.mark{width:48px;height:48px;border:1px solid #ffffff66;border-radius:13px;display:grid;place-items:center;font-size:25px;background:#ffffff16}
+.brandline small{display:block;color:#d7e7f8;letter-spacing:.08em;font-size:11px;font-weight:700}.brandline strong{font-size:19px}
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:24px}.hero h1{font-size:clamp(27px,4vw,40px);line-height:1.1;margin:0 0 9px}.hero p{color:#e1edf8;margin:0;max-width:700px}.calendar-link{color:#fff;border:1px solid #ffffff80;border-radius:9px;padding:10px 14px;text-decoration:none;white-space:nowrap;font-weight:700}
+main{max-width:1220px;margin:24px auto;padding:0 18px}.notice{background:#fff8e8;border:1px solid #f3dfb2;color:#694d17;border-radius:10px;padding:12px 15px;margin-bottom:17px;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}.stat b{display:block;font-size:23px;color:var(--navy)}.stat span{font-size:12px;color:var(--muted)}
+.layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:18px;align-items:start}.panel{background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px;margin-bottom:15px;box-shadow:0 4px 16px #173b6010}.panel h2{font-size:16px;margin:0 0 14px;color:var(--navy)}label{display:block;font-size:12px;font-weight:700;color:#475467;margin:10px 0 5px}input,select,textarea{width:100%;border:1px solid #ccd6e2;border-radius:8px;padding:10px 11px;font:inherit;background:#fff;color:var(--ink)}textarea{min-height:70px;resize:vertical}.btn{border:0;border-radius:8px;padding:10px 13px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer}.btn.secondary{background:#eaf1f8;color:var(--navy);border:1px solid #cfdeed}.btn.teal{background:var(--teal)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.filters{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.toolbar h2{margin:0}.resource{border:1px solid var(--line);border-radius:11px;padding:14px;margin:10px 0;background:#fff}.resource h3{font-size:15px;margin:0 0 5px}.meta{color:var(--muted);font-size:12px}.tag{display:inline-block;background:#eaf3fb;color:#245b8e;border-radius:99px;padding:3px 8px;font-size:11px;font-weight:700;margin:7px 5px 0 0}.resource a{color:#1768a6;font-weight:700;text-decoration:none;overflow-wrap:anywhere}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed #cad5e2;border-radius:11px}.muted{font-size:12px;color:var(--muted)}.api-status{font-size:12px;margin-top:9px;color:var(--muted)}.api-status.ok{color:#08795d}.api-status.err{color:#b42318}.footer{text-align:center;padding:24px;color:#758195;font-size:12px}
+@media(max-width:850px){.layout{grid-template-columns:1fr}.hero{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:1fr 1fr}.filters{grid-template-columns:1fr 1fr}.filters input{grid-column:1/-1}}
+@media(max-width:480px){.stats,.filters{grid-template-columns:1fr}.brandline strong{font-size:16px}}
+</style>
+</head>
+<body>
+<header>
+ <div class="brandline"><div class="mark">📚</div><div><small>केन्द्रीय विद्यालय संगठन • KENDRIYA VIDYALAYA SANGATHAN</small><strong>आंचलिक शिक्षा एवं प्रशिक्षण संस्थान, मुंबई | ZIET MUMBAI</strong></div></div>
+ <div class="hero"><div><h1>ZIET Workshop Resource Repository</h1><p>A shared resource catalogue for ZIET Mumbai workshops — connected across the Workshop Timetable App, Individual Workshop Apps and this Central Repository.</p></div><a class="calendar-link" href="https://zietmumbai.kvs.gov.in/en/weekly-calendar/" target="_blank" rel="noopener">View Weekly Calendar ↗</a></div>
+</header>
+<main>
+ <div class="notice"><b>Central repository:</b> Resource records are intended to be shared by all three application tiers through one Google Apps Script API and the central Google Sheet. Connect the API in Settings to enable live retrieval and updates.</div>
+ <div class="stats"><div class="stat"><b id="totalCount">—</b><span>Resources in repository</span></div><div class="stat"><b id="workshopCount">—</b><span>Workshops represented</span></div><div class="stat"><b id="connectionLabel">Not connected</b><span>Central database status</span></div></div>
+ <div class="layout">
+  <aside>
+   <section class="panel"><h2>＋ Add / Update Resource</h2>
+    <form id="resourceForm">
+     <input type="hidden" id="resourceId">
+     <label for="workshop">Workshop Name *</label><select id="workshop" required><option value="">Select workshop</option></select>
+     <label for="workshopId">Workshop ID</label><input id="workshopId" readonly placeholder="Assigned from master list">
+     <label for="day">Day</label><input id="day" placeholder="e.g. Day 1">
+     <label for="date">Date</label><input id="date" type="date">
+     <label for="session">Session</label><input id="session" placeholder="e.g. Session 2">
+     <label for="title">Resource Title *</label><input id="title" required placeholder="Presentation / video / handout title">
+     <label for="type">Resource Type</label><select id="type"><option>Presentation</option><option>PDF / Document</option><option>Video</option><option>Photo Gallery</option><option>Activity / Worksheet</option><option>Reference / Circular</option><option>Feedback</option><option>Report</option><option>Other</option></select>
+     <label for="url">Shareable URL *</label><input id="url" type="url" required placeholder="https://...">
+     <label for="description">Description / Keywords</label><textarea id="description" placeholder="Brief description, speaker, topic or keywords"></textarea>
+     <div class="actions"><button class="btn teal" type="submit">Save Resource</button><button class="btn secondary" type="button" id="resetForm">Clear</button></div>
+     <div class="muted" id="formHint">New records receive a unique Resource ID. Editing uses the same ID.</div>
+    </form>
+   </section>
+   <section class="panel"><h2>Central API Settings</h2>
+    <label for="apiUrl">Google Apps Script Web App URL</label><input id="apiUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="actions"><button class="btn" id="saveApi">Save API URL</button><button class="btn secondary" id="syncBtn">Refresh records</button></div>
+    <div id="apiStatus" class="api-status">API URL not configured in this browser.</div>
+    <p class="muted">The same deployed API endpoint must be configured in the Timetable App and each Individual Workshop App. Do not enter secret keys in public client-side code.</p>
+   </section>
+  </aside>
+  <section>
+   <div class="panel"><div class="toolbar"><h2>Browse Workshop Resources</h2><button class="btn secondary" id="exportCsv">Export CSV</button></div>
+    <div class="filters"><input id="search" placeholder="Search title, description, speaker..."><select id="filterWorkshop"><option value="">All workshops</option></select><select id="filterType"><option value="">All resource types</option><option>Presentation</option><option>PDF / Document</option><option>Video</option><option>Photo Gallery</option><option>Activity / Worksheet</option><option>Reference / Circular</option><option>Feedback</option><option>Report</option><option>Other</option></select></div>
+   </div>
+   <div id="resourceList"><div class="empty">Configure the central API or add a resource to begin.</div></div>
+  </section>
+ </div>
+</main>
+<div class="footer">ZIET Mumbai • Workshop Resource Repository • Centralised resource access across three application tiers</div>
+<script>
+/* Hard-coded workshop master list transcribed from ZIET Mumbai Weekly Calendar.
+   Update titles/metadata here when the official calendar is revised. */
+const WORKSHOPS = [
+ {id:"ZIET-2026-01-05-SCHOOL-LEADERSHIP",name:"School Leadership and Management Workshop",date:"2026-01-05"},
+ {id:"ZIET-2026-01-12-FOUNDATIONAL",name:"Foundational Stage: Capacity Building Programme",date:"2026-01-12"},
+ {id:"ZIET-2026-01-19-PREPARATORY",name:"Preparatory Stage: Capacity Building Programme",date:"2026-01-19"},
+ {id:"ZIET-2026-02-02-CBE",name:"Competency Based Education",date:"2026-02-02"},
+ {id:"ZIET-2026-02-16-NEP",name:"NEP 2020 and NCF Implementation",date:"2026-02-16"},
+ {id:"ZIET-2026-03-02-ICT",name:"Integration of ICT in Teaching-Learning",date:"2026-03-02"},
+ {id:"ZIET-2026-04-06-FLN",name:"Foundational Literacy and Numeracy (FLN)",date:"2026-04-06"},
+ {id:"ZIET-2026-05-05-INSTRUCTIONAL-LEADERSHIP",name:"Instructional Leadership for Foundational & Preparatory Excellence",date:"2026-05-05"},
+ {id:"ZIET-2026-05-18-VICE-PRINCIPALS",name:"Workshop for Vice Principals",date:"2026-05-18"},
+ {id:"ZIET-2026-06-PRINCIPALS",name:"Strategic School Leadership Workshop for KV Principals",date:"2026-06-01"},
+ {id:"ZIET-2026-07-BALVATIKA-I",name:"Nurturing Foundations: Play-Based & Experiential Learning in Balvatika — Batch I",date:"2026-07-16"},
+ {id:"ZIET-2026-07-BALVATIKA-II",name:"Nurturing Foundations: Play-Based & Experiential Learning in Balvatika — Batch II",date:"2026-07-23"},
+ {id:"ZIET-2026-08-SOUNDS-TO-SENSE",name:"Sounds to Sense: Strengthening Language Acquisition through Phonics and Meaning-Making",date:"2026-08-31"},
+ {id:"ZIET-2026-11-MUSIC-AHMEDABAD",name:"लय, राग और आत्मचिंतन / Rhythm, Raga and Reflection — Music Teachers Workshop (Ahmedabad Region)",date:"2026-11-02"},
+ {id:"ZIET-2026-11-MUSIC-MUMBAI",name:"Mass Saturation Training for Music Teachers of KVS Mumbai Region",date:"2026-11-23"}
+];
+const $=id=>document.getElementById(id);let records=[];let apiUrl=localStorage.getItem("zietResourceApiUrl")||"";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function fillWorkshopOptions(){for(const id of ["workshop","filterWorkshop"]){const el=$(id);WORKSHOPS.forEach(w=>{const o=document.createElement("option");o.value=w.id;o.textContent=w.name;el.appendChild(o)})}}
+function currentWorkshop(){return WORKSHOPS.find(w=>w.id===$("workshop").value)}
+$("workshop").addEventListener("change",()=>{$("workshopId").value=$("workshop").value});
+function status(msg,kind=""){ $("apiStatus").textContent=msg;$("apiStatus").className="api-status "+kind;$("connectionLabel").textContent=kind==="ok"?"Connected":"Not connected"}
+function clearForm(){$("resourceForm").reset();$("resourceId").value="";$("workshopId").value="";$("formHint").textContent="New records receive a unique Resource ID. Editing uses the same ID."}
+function render(){const q=$("search").value.toLowerCase(),w=$("filterWorkshop").value,t=$("filterType").value;const list=records.filter(r=>(!w||r.workshopId===w)&&(!t||r.resourceType===t)&&[r.title,r.description,r.workshopName,r.session,r.speaker].join(" ").toLowerCase().includes(q));$("totalCount").textContent=records.length;$("workshopCount").textContent=new Set(records.map(x=>x.workshopId).filter(Boolean)).size;
+if(!list.length){$("resourceList").innerHTML='<div class="empty">No matching resources. Add a resource or change the filters.</div>';return}
+$("resourceList").innerHTML=list.map(r=>'<article class="resource"><h3>'+esc(r.title)+'</h3><div class="meta">'+esc(r.workshopName||"Workshop not specified")+' • '+esc([r.day,r.date,r.session].filter(Boolean).join(" / "))+'</div><span class="tag">'+esc(r.resourceType||"Other")+'</span>'+(r.description?'<p>'+esc(r.description)+'</p>':'')+'<div><a href="'+esc(r.url)+'" target="_blank" rel="noopener">Open resource ↗</a></div><div class="actions"><button class="btn secondary" data-edit="'+esc(r.resourceId)+'">Edit</button><button class="btn secondary" data-delete="'+esc(r.resourceId)+'">Delete</button></div></article>').join("");
+}
+async function api(action,payload={}){if(!apiUrl)throw Error("Configure the Google Apps Script Web App URL first.");const url=new URL(apiUrl);if(action==="list"){url.searchParams.set("action","list");url.searchParams.set("app","central-repository");const res=await fetch(url);if(!res.ok)throw Error("API request failed: "+res.status);return res.json()}
+const res=await fetch(apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,...payload,sourceApp:"central-repository"})});if(!res.ok)throw Error("API request failed: "+res.status);return res.json()}
+async function sync(){try{status("Connecting and loading records...");const data=await api("list");records=Array.isArray(data)?data:(data.resources||data.records||[]);records=records.filter(r=>r.status!=="deleted");render();status("Connected • "+records.length+" records loaded","ok")}catch(e){status(e.message,"err")}}
+$("resourceForm").addEventListener("submit",async e=>{e.preventDefault();const w=currentWorkshop();if(!w){alert("Please select a workshop.");return}const id=$("resourceId").value||("RES-"+(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)));const existing=records.find(r=>r.resourceId===id)||{};const record={...existing,resourceId:id,workshopId:w.id,workshopName:w.name,day:$("day").value,date:$("date").value,session:$("session").value,title:$("title").value.trim(),resourceType:$("type").value,url:$("url").value.trim(),description:$("description").value.trim(),updatedAt:new Date().toISOString(),status:"active"};try{const result=await api("upsert",{resource:record,...record});if(result&&result.success===false)throw Error(result.message||"Save rejected by API");const ix=records.findIndex(r=>r.resourceId===id);if(ix>=0)records[ix]=record;else records.unshift(record);render();clearForm();status("Resource saved to central database","ok")}catch(err){alert("Could not save centrally: "+err.message);status(err.message,"err")}});
+$("resourceList").addEventListener("click",async e=>{const edit=e.target.dataset.edit,del=e.target.dataset.delete;if(edit){const r=records.find(x=>x.resourceId===edit);if(!r)return;$("resourceId").value=r.resourceId;$("workshop").value=r.workshopId;$("workshopId").value=r.workshopId;$("day").value=r.day||"";$("date").value=r.date||"";$("session").value=r.session||"";$("title").value=r.title||"";$("type").value=r.resourceType||"Other";$("url").value=r.url||"";$("description").value=r.description||"";$("formHint").textContent="Editing "+r.resourceId+" — saving updates the same record.";window.scrollTo({top:0,behavior:"smooth"})}
+if(del){if(!confirm("Delete this resource from the central repository and all connected apps?"))return;try{const r=records.find(x=>x.resourceId===del);await api("delete",{resourceId:del,resource:r,status:"deleted"});records=records.filter(x=>x.resourceId!==del);render();status("Deletion sent to central database","ok")}catch(err){alert("Central deletion failed: "+err.message);status(err.message,"err")}}});
+$("resetForm").onclick=clearForm;$("search").oninput=render;$("filterWorkshop").onchange=render;$("filterType").onchange=render;
+$("saveApi").onclick=()=>{apiUrl=$("apiUrl").value.trim();localStorage.setItem("zietResourceApiUrl",apiUrl);status(apiUrl?"API URL saved. Press Refresh records to test connection.":"API URL cleared.");};
+$("syncBtn").onclick=sync;
+$("exportCsv").onclick=()=>{const rows=[["Resource ID","Workshop ID","Workshop","Day","Date","Session","Title","Type","URL","Description"],...records.map(r=>[r.resourceId,r.workshopId,r.workshopName,r.day,r.date,r.session,r.title,r.resourceType,r.url,r.description])];const csv=rows.map(row=>row.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",")).join("\r\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="ZIET-Workshop-Resources.csv";a.click();URL.revokeObjectURL(a.href)};
+fillWorkshopOptions();$("apiUrl").value=apiUrl;render();if(apiUrl)sync();
+</script>
+</body></html>
