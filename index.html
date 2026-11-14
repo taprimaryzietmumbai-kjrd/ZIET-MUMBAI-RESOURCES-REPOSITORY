@@ -82,7 +82,8 @@ const WORKSHOPS = [
  {id:"ZIET-2026-11-MUSIC-AHMEDABAD",name:"लय, राग और आत्मचिंतन / Rhythm, Raga and Reflection — Music Teachers Workshop (Ahmedabad Region)",date:"2026-11-02"},
  {id:"ZIET-2026-11-MUSIC-MUMBAI",name:"Mass Saturation Training for Music Teachers of KVS Mumbai Region",date:"2026-11-23"}
 ];
-const $=id=>document.getElementById(id);let records=[];let apiUrl=localStorage.getItem("zietResourceApiUrl")||"";
+const DEFAULT_API_URL="https://script.google.com/macros/s/AKfycbzIctgo8aocYxNHquk9I0V6IywdVLiC0zdyPnIycCvIGcfQshQuBeUk79hjdUUHI-oYsg/exec";
+const $=id=>document.getElementById(id);let records=[];let apiUrl=localStorage.getItem("zietResourceApiUrl")||DEFAULT_API_URL;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function fillWorkshopOptions(){for(const id of ["workshop","filterWorkshop"]){const el=$(id);WORKSHOPS.forEach(w=>{const o=document.createElement("option");o.value=w.id;o.textContent=w.name;el.appendChild(o)})}}
 function currentWorkshop(){return WORKSHOPS.find(w=>w.id===$("workshop").value)}
