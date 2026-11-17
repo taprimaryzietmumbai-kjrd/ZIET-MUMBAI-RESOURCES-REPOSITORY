@@ -496,6 +496,30 @@ function adminDeactivateTA_(employeeCode) {
 }
 
 
+
+// Run this once from the Apps Script editor to choose your own admin password.
+// The password is entered in private Google prompts and is never logged.
+function setAdministratorPassword() {
+  const ui = SpreadsheetApp.getUi();
+  const first = ui.prompt('Set Your Administrator Password',
+    'Enter your preferred password (minimum 12 characters). Do not share it.',
+    ui.ButtonSet.OK_CANCEL);
+  if (first.getSelectedButton() !== ui.Button.OK) return 'Cancelled.';
+  const password = first.getResponseText();
+  if (password.length < 12) throw new Error('Password must contain at least 12 characters.');
+  const second = ui.prompt('Confirm Administrator Password',
+    'Enter the same password again.',
+    ui.ButtonSet.OK_CANCEL);
+  if (second.getSelectedButton() !== ui.Button.OK || second.getResponseText() !== password)
+    throw new Error('Passwords did not match. Run the function again.');
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('SECURE_ADMIN_SALT', salt);
+  props.setProperty('SECURE_ADMIN_HASH', securityHash_(password, salt));
+  CacheService.getScriptCache().removeAll([]);
+  return 'Your chosen administrator password has been saved securely.';
+}
+
 function adminChangePassword_(b) {
   const current = String(b.currentPassword || '');
   const next = String(b.newPassword || '');
