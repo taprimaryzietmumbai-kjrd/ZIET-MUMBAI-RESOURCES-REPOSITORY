@@ -90,6 +90,27 @@ function doPost(e) {
   }
 }
 
+
+/**
+ * Run this once from the Apps Script editor as the script owner.
+ * It requests Drive access and creates any missing Coordinator/category folders.
+ */
+function authorizeDriveAccess() {
+  const root = DriveApp.getFolderById(COORDINATOR_ROOT_ID);
+  let created = 0;
+  COORDINATORS.forEach(name => {
+    const coordinatorFolder = getOrCreateChildFolder_(root, name);
+    CATEGORIES.forEach(category => {
+      const before = coordinatorFolder.getFoldersByName(category).hasNext();
+      getOrCreateChildFolder_(coordinatorFolder, category);
+      if (!before) created++;
+    });
+  });
+  // Also confirm the central spreadsheet is accessible to this script.
+  SpreadsheetApp.openById(SPREADSHEET_ID).getName();
+  return 'Drive access authorised. Missing category folders created: ' + created;
+}
+
 function saveDriveUpload_(body, resource) {
   if (!resource.workshopId) throw new Error('Select a workshop before uploading');
   if (!resource.title) throw new Error('Document title is required');
