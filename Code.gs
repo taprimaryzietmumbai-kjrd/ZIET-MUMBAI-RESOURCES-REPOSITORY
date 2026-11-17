@@ -314,15 +314,15 @@ function resetSecurityAdminPassword() {
 
 function handleSecureAction_(action, body) {
   switch (action) {
-    case 'secureRequestAccess': return secureRequestAccess_(body);
-    case 'secureVerifyOtp': return secureVerifyOtp_(body);
-    case 'secureGetSpreadsheet': return secureGetSpreadsheet_(body);
-    case 'adminLogin': return adminLogin_(body);
-    case 'adminListRequests': requireAdmin_(body.adminToken); return {success:true,requests:listAccessRequests_(),tas:listAuthorisedTAs_()};
-    case 'adminApproveRequest': requireAdmin_(body.adminToken); return adminApproveRequest_(body.requestId);
-    case 'adminRejectRequest': requireAdmin_(body.adminToken); return adminRejectRequest_(body.requestId);
-    case 'adminSaveTA': requireAdmin_(body.adminToken); return adminSaveTA_(body.ta || {});
-    case 'adminDeactivateTA': requireAdmin_(body.adminToken); return adminDeactivateTA_(body.employeeCode);
+    case 'securerequestaccess': return secureRequestAccess_(body);
+    case 'secureverifyotp': return secureVerifyOtp_(body);
+    case 'securegetspreadsheet': return secureGetSpreadsheet_(body);
+    case 'adminlogin': return adminLogin_(body);
+    case 'adminlistrequests': requireAdmin_(body.adminToken); return {success:true,requests:listAccessRequests_(),tas:listAuthorisedTAs_()};
+    case 'adminapproverequest': requireAdmin_(body.adminToken); return adminApproveRequest_(body.requestId);
+    case 'adminrejectrequest': requireAdmin_(body.adminToken); return adminRejectRequest_(body.requestId);
+    case 'adminsaveta': requireAdmin_(body.adminToken); return adminSaveTA_(body.ta || {});
+    case 'admindeactivateta': requireAdmin_(body.adminToken); return adminDeactivateTA_(body.employeeCode);
     default: throw new Error('Unsupported secure action');
   }
 }
