@@ -107,9 +107,11 @@ function authorizeDriveAccess() {
       if (!before) created++;
     });
   });
-  // Also confirm the central spreadsheet is accessible to this script.
+  // Confirm both reporting spreadsheets are accessible and create the secondary Resources tab if needed.
   SpreadsheetApp.openById(SPREADSHEET_ID).getName();
-  return 'Drive access authorised. Missing category folders created: ' + created;
+  const secondaryName = SpreadsheetApp.openById(SECONDARY_SPREADSHEET_ID).getName();
+  getSecondarySheet_();
+  return 'Drive access authorised. Secondary reporting sheet ready: ' + secondaryName + '. Missing category folders created: ' + created;
 }
 
 function saveDriveUpload_(body, resource) {
