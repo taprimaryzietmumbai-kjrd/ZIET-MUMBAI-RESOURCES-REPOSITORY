@@ -21,7 +21,7 @@ const HEADERS = [
   'resourceId','workshopId','workshopName','day','date','session',
   'title','resourceType','url','description','speaker','sourceApp',
   'createdAt','updatedAt','status','coordinator','driveFileId',
-  'driveFolderId','storageMode','fileName','mimeType'
+  'driveFolderId','storageMode','fileName','mimeType','targetGroup','workshopFrom','workshopTo'
 ];
 
 function doGet(e) {
@@ -114,6 +114,8 @@ function authorizeDriveAccess() {
 function saveDriveUpload_(body, resource) {
   if (!resource.workshopId) throw new Error('Select a workshop before uploading');
   if (!resource.title) throw new Error('Document title is required');
+  if (!resource.targetGroup || !resource.workshopFrom || !resource.workshopTo) throw new Error('Target Groups, Workshop From and Workshop To are required');
+  if (String(resource.workshopTo) < String(resource.workshopFrom)) throw new Error('Workshop To cannot be earlier than Workshop From');
   if (COORDINATORS.indexOf(String(resource.coordinator || '')) === -1)
     throw new Error('Select a valid Coordinator');
   if (CATEGORIES.indexOf(String(resource.resourceType || '')) === -1)
@@ -175,6 +177,8 @@ function upsert_(input, sourceApp) {
   if (!input || !input.resourceId) throw new Error('resourceId is required');
   if (!input.workshopId) throw new Error('workshopId is required');
   if (!input.title || !input.url) throw new Error('title and url are required');
+  if (!input.targetGroup || !input.workshopFrom || !input.workshopTo) throw new Error('Target Groups, Workshop From and Workshop To are required');
+  if (String(input.workshopTo) < String(input.workshopFrom)) throw new Error('Workshop To cannot be earlier than Workshop From');
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const sh = getSheet_();
