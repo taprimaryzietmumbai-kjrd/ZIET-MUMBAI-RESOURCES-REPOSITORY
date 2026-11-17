@@ -298,6 +298,20 @@ function initializeSecurityAdmin() {
   return 'Administrator configured. Copy the INITIAL ADMIN PASSWORD from the execution log and keep it privately. Do not run this setup again.';
 }
 
+
+// Emergency credential rotation. Run from the Apps Script editor if the admin
+// password may have been exposed. The new password is shown once in the execution log.
+function resetSecurityAdminPassword() {
+  const password = Utilities.getUuid() + '-' + Utilities.getUuid();
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('SECURE_ADMIN_SALT', salt);
+  props.setProperty('SECURE_ADMIN_HASH', securityHash_(password, salt));
+  CacheService.getScriptCache().removeAll([]);
+  Logger.log('NEW INITIAL ADMIN PASSWORD (copy and keep privately): ' + password);
+  return 'Administrator password rotated. Copy the new password from the execution log.';
+}
+
 function handleSecureAction_(action, body) {
   switch (action) {
     case 'secureRequestAccess': return secureRequestAccess_(body);
