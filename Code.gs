@@ -55,6 +55,10 @@ function doPost(e) {
       body = JSON.parse(e.parameter.payload);
     }
     const action = String(body.action || '').toLowerCase();
+    // Secure spreadsheet access actions; existing public workshop API remains unchanged.
+    if (String(action).startsWith('secure') || String(action).startsWith('admin')) {
+      return json_(handleSecureAction_(action, body));
+    }
     if (action === 'upload') {
       const resource = body.resource || body;
       const uploaded = saveDriveUpload_(body, resource);
@@ -253,4 +257,217 @@ function softDeleteInSheet_(sh, resourceId, sourceApp) {
 
 function rowToObject_(headers,row) {
   const out={}; headers.forEach((h,i)=>out[h]=row[i]); return out;
+}
+
+
+/* ================= SECURE TA SPREADSHEET ACCESS =================
+   Admin setup: run initializeSecurityAdmin() once from the Apps Script editor.
+   This stores a salted password hash in Script Properties; the password is never
+   stored in the spreadsheet or source code.
+*/
+const TA_REGISTER_SHEET = 'Authorised_TAs';
+const TA_REQUESTS_SHEET = 'TA_Access_Requests';
+const SECURE_SESSION_SECONDS = 6 * 60 * 60;
+const OTP_SECONDS = 5 * 60;
+
+function initializeSecurityAdmin() {
+  const ui = SpreadsheetApp.getUi();
+  const p1 = ui.prompt('Set Secure Repository Admin Password',
+    'Create a strong password (at least 12 characters). It will not be stored in plain text.',
+    ui.ButtonSet.OK_CANCEL);
+  if (p1.getSelectedButton() !== ui.Button.OK) return 'Setup cancelled.';
+  const password = p1.getResponseText();
+  if (!password || password.length < 12) throw new Error('Use a password of at least 12 characters.');
+  const p2 = ui.prompt('Confirm Admin Password', 'Enter the same password again.', ui.ButtonSet.OK_CANCEL);
+  if (p2.getSelectedButton() !== ui.Button.OK || p2.getResponseText() !== password)
+    throw new Error('Passwords did not match. Run setup again.');
+  const props = PropertiesService.getScriptProperties();
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  props.setProperty('SECURE_ADMIN_SALT', salt);
+  props.setProperty('SECURE_ADMIN_HASH', securityHash_(password, salt));
+  getSecurityRegister_();
+  getSecurityRequests_();
+  return 'Secure administrator configured. Keep the password private.';
+}
+
+function handleSecureAction_(action, body) {
+  switch (action) {
+    case 'secureRequestAccess': return secureRequestAccess_(body);
+    case 'secureVerifyOtp': return secureVerifyOtp_(body);
+    case 'secureGetSpreadsheet': return secureGetSpreadsheet_(body);
+    case 'adminLogin': return adminLogin_(body);
+    case 'adminListRequests': requireAdmin_(body.adminToken); return {success:true,requests:listAccessRequests_(),tas:listAuthorisedTAs_()};
+    case 'adminApproveRequest': requireAdmin_(body.adminToken); return adminApproveRequest_(body.requestId);
+    case 'adminRejectRequest': requireAdmin_(body.adminToken); return adminRejectRequest_(body.requestId);
+    case 'adminSaveTA': requireAdmin_(body.adminToken); return adminSaveTA_(body.ta || {});
+    case 'adminDeactivateTA': requireAdmin_(body.adminToken); return adminDeactivateTA_(body.employeeCode);
+    default: throw new Error('Unsupported secure action');
+  }
+}
+
+function securityHash_(value, salt) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + '|' + value, Utilities.Charset.UTF_8);
+  return Utilities.base64Encode(bytes);
+}
+
+function getSecurityRegister_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(TA_REGISTER_SHEET);
+  if (!sh) sh = ss.insertSheet(TA_REGISTER_SHEET);
+  const headers = ['Employee Code','Name','DOB','DOJ','Registered Mobile','Status','Created At','Updated At'];
+  if (sh.getLastRow() === 0) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+function getSecurityRequests_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(TA_REQUESTS_SHEET);
+  if (!sh) sh = ss.insertSheet(TA_REQUESTS_SHEET);
+  const headers = ['Request ID','Employee Code','Name','Requested At','Status','Approved At','Rejected At'];
+  if (sh.getLastRow() === 0) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+function normaliseCode_(v) { return String(v || '').trim().toUpperCase(); }
+function normaliseDate_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const s = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  return m ? m[3] + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[1]).slice(-2) : s;
+}
+
+function secureRequestAccess_(b) {
+  const code = normaliseCode_(b.employeeCode);
+  const dob = normaliseDate_(b.dob), doj = normaliseDate_(b.doj);
+  const last4 = String(b.mobileLast4 || '').replace(/\D/g,'').slice(-4);
+  if (!code || !dob || !doj || !/^\d{4}$/.test(last4))
+    throw new Error('Enter Employee Code, DOB, DOJ and the last four mobile digits.');
+  const sh = getSecurityRegister_(), data = sh.getDataRange().getValues();
+  if (data.length < 2) throw new Error('No authorised TA records are configured yet.');
+  const h = data[0].map(String);
+  const ix = {code:h.indexOf('Employee Code'),dob:h.indexOf('DOB'),doj:h.indexOf('DOJ'),mobile:h.indexOf('Registered Mobile'),status:h.indexOf('Status'),name:h.indexOf('Name')};
+  const match = data.slice(1).find(r => normaliseCode_(r[ix.code]) === code &&
+    normaliseDate_(r[ix.dob]) === dob && normaliseDate_(r[ix.doj]) === doj &&
+    String(r[ix.mobile] || '').replace(/\D/g,'').slice(-4) === last4 &&
+    String(r[ix.status] || '').toLowerCase() === 'active');
+  if (!match) throw new Error('The details could not be verified. Please contact the administrator.');
+  const requestId = 'TA-' + Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();
+  getSecurityRequests_().appendRow([requestId,code,String(match[ix.name]||''),new Date(),'Pending','','']);
+  return {success:true,requestId:requestId,message:'Identity matched. Your request is pending administrator approval.'};
+}
+
+function adminLogin_(b) {
+  const props = PropertiesService.getScriptProperties();
+  const salt = props.getProperty('SECURE_ADMIN_SALT'), expected = props.getProperty('SECURE_ADMIN_HASH');
+  if (!salt || !expected) throw new Error('Administrator setup is not complete. Run initializeSecurityAdmin() in Apps Script first.');
+  const supplied = securityHash_(String(b.password || ''), salt);
+  if (supplied !== expected) throw new Error('Invalid administrator password.');
+  const token = Utilities.getUuid() + Utilities.getUuid();
+  CacheService.getScriptCache().put('ADMIN:' + token, '1', SECURE_SESSION_SECONDS);
+  return {success:true,adminToken:token,expiresIn:SECURE_SESSION_SECONDS};
+}
+
+function requireAdmin_(token) {
+  if (!token || CacheService.getScriptCache().get('ADMIN:' + token) !== '1')
+    throw new Error('Administrator session expired. Sign in again.');
+}
+
+function listAccessRequests_() {
+  const sh = getSecurityRequests_(), v = sh.getDataRange().getValues();
+  return v.slice(1).filter(r => r[0]).map(r => ({
+    requestId:String(r[0]),employeeCode:String(r[1]),name:String(r[2]),
+    requestedAt:r[3] instanceof Date ? r[3].toISOString() : String(r[3]||''),
+    status:String(r[4]||'Pending')
+  })).reverse();
+}
+
+function listAuthorisedTAs_() {
+  const sh = getSecurityRegister_(), v = sh.getDataRange().getValues();
+  return v.slice(1).filter(r => r[0]).map(r => ({
+    employeeCode:String(r[0]),name:String(r[1]),dob:normaliseDate_(r[2]),
+    doj:normaliseDate_(r[3]),mobile:String(r[4]),status:String(r[5]||'Active')
+  }));
+}
+
+function findRequestRow_(requestId) {
+  const sh = getSecurityRequests_(), v = sh.getDataRange().getValues();
+  for (let i=1;i<v.length;i++) if (String(v[i][0]) === String(requestId)) return {sheet:sh,row:i+1,values:v[i]};
+  throw new Error('Access request not found.');
+}
+
+function adminApproveRequest_(requestId) {
+  const found = findRequestRow_(requestId);
+  if (String(found.values[4]) !== 'Pending') throw new Error('This request is no longer pending.');
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const key = 'OTP:' + requestId;
+  CacheService.getScriptCache().put(key, securityHash_(otp, requestId), OTP_SECONDS);
+  found.sheet.getRange(found.row,5).setValue('Approved — OTP issued');
+  found.sheet.getRange(found.row,6).setValue(new Date());
+  return {success:true,requestId:requestId,otp:otp,expiresIn:OTP_SECONDS,
+    message:'Share this one-time code with the TA through WhatsApp. It expires in five minutes.'};
+}
+
+function adminRejectRequest_(requestId) {
+  const found = findRequestRow_(requestId);
+  found.sheet.getRange(found.row,5).setValue('Rejected');
+  found.sheet.getRange(found.row,7).setValue(new Date());
+  CacheService.getScriptCache().remove('OTP:' + requestId);
+  return {success:true,message:'Request rejected.'};
+}
+
+function secureVerifyOtp_(b) {
+  const requestId = String(b.requestId || ''), otp = String(b.otp || '').trim();
+  if (!requestId || !/^\d{6}$/.test(otp)) throw new Error('Enter the six-digit access code.');
+  const cached = CacheService.getScriptCache().get('OTP:' + requestId);
+  if (!cached || cached !== securityHash_(otp, requestId)) throw new Error('Invalid or expired access code. Request approval again.');
+  CacheService.getScriptCache().remove('OTP:' + requestId);
+  const found = findRequestRow_(requestId);
+  if (String(found.values[4]) !== 'Approved — OTP issued') throw new Error('This request is not approved.');
+  const session = Utilities.getUuid() + Utilities.getUuid();
+  CacheService.getScriptCache().put('VIEW:' + session, String(found.values[1]), SECURE_SESSION_SECONDS);
+  found.sheet.getRange(found.row,5).setValue('Access granted');
+  return {success:true,sessionToken:session,expiresIn:SECURE_SESSION_SECONDS};
+}
+
+function secureGetSpreadsheet_(b) {
+  const token = String(b.sessionToken || '');
+  if (!token) throw new Error('Sign in to view spreadsheet data.');
+  if (!CacheService.getScriptCache().get('VIEW:' + token)) throw new Error('Your viewer session has expired. Request access again.');
+  const which = String(b.sheet || 'master');
+  const id = which === 'compendium' ? SECONDARY_SPREADSHEET_ID : (which === 'master' ? SPREADSHEET_ID : '');
+  if (!id) throw new Error('Unknown spreadsheet selection.');
+  const ss = SpreadsheetApp.openById(id);
+  const sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) return {success:true,spreadsheet:ss.getName(),headers:[],rows:[]};
+  const values = sh.getDataRange().getDisplayValues();
+  const maxRows = 500, maxCols = 40;
+  const clipped = values.slice(0,maxRows).map(r => r.slice(0,maxCols));
+  return {success:true,spreadsheet:ss.getName(),headers:clipped[0]||[],rows:clipped.slice(1),truncated:values.length>maxRows||values.some(r=>r.length>maxCols)};
+}
+
+function adminSaveTA_(ta) {
+  const code = normaliseCode_(ta.employeeCode);
+  const name = String(ta.name || '').trim();
+  const dob = normaliseDate_(ta.dob), doj = normaliseDate_(ta.doj);
+  const mobile = String(ta.mobile || '').replace(/\D/g,'');
+  if (!code || !name || !dob || !doj || !/^\d{10}$/.test(mobile))
+    throw new Error('Enter Employee Code, Name, DOB, DOJ and a valid 10-digit mobile number.');
+  const sh = getSecurityRegister_(), v = sh.getDataRange().getValues(), h = v[0].map(String);
+  const codeCol = h.indexOf('Employee Code'), nameCol=h.indexOf('Name');
+  let row = -1;
+  for(let i=1;i<v.length;i++) if(normaliseCode_(v[i][codeCol])===code){row=i+1;break;}
+  const now = new Date();
+  const record = [code,name,dob,doj,mobile,String(ta.status||'Active'),now,now];
+  if(row>0) { record[6]=v[row-1][6]||now; sh.getRange(row,1,1,record.length).setValues([record]); }
+  else sh.appendRow(record);
+  return {success:true,message:'TA record saved.'};
+}
+
+function adminDeactivateTA_(employeeCode) {
+  const code=normaliseCode_(employeeCode), sh=getSecurityRegister_(), v=sh.getDataRange().getValues();
+  for(let i=1;i<v.length;i++) if(normaliseCode_(v[i][0])===code){sh.getRange(i+1,6).setValue('Inactive');sh.getRange(i+1,8).setValue(new Date());return {success:true,message:'TA access deactivated.'};}
+  throw new Error('Employee Code not found.');
 }
