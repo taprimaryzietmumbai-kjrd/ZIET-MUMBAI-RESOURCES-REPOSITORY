@@ -323,6 +323,7 @@ function handleSecureAction_(action, body) {
     case 'adminrejectrequest': requireAdmin_(body.adminToken); return adminRejectRequest_(body.requestId);
     case 'adminsaveta': requireAdmin_(body.adminToken); return adminSaveTA_(body.ta || {});
     case 'admindeactivateta': requireAdmin_(body.adminToken); return adminDeactivateTA_(body.employeeCode);
+    case 'adminchangepassword': requireAdmin_(body.adminToken); return adminChangePassword_(body);
     default: throw new Error('Unsupported secure action');
   }
 }
@@ -492,4 +493,20 @@ function adminDeactivateTA_(employeeCode) {
   const code=normaliseCode_(employeeCode), sh=getSecurityRegister_(), v=sh.getDataRange().getValues();
   for(let i=1;i<v.length;i++) if(normaliseCode_(v[i][0])===code){sh.getRange(i+1,6).setValue('Inactive');sh.getRange(i+1,8).setValue(new Date());return {success:true,message:'TA access deactivated.'};}
   throw new Error('Employee Code not found.');
+}
+
+
+function adminChangePassword_(b) {
+  const current = String(b.currentPassword || '');
+  const next = String(b.newPassword || '');
+  if (next.length < 12) throw new Error('Choose a password with at least 12 characters.');
+  const props = PropertiesService.getScriptProperties();
+  const salt = props.getProperty('SECURE_ADMIN_SALT'), expected = props.getProperty('SECURE_ADMIN_HASH');
+  if (!salt || !expected || securityHash_(current, salt) !== expected)
+    throw new Error('Current administrator password is incorrect.');
+  const newSalt = Utilities.getUuid() + Utilities.getUuid();
+  props.setProperty('SECURE_ADMIN_SALT', newSalt);
+  props.setProperty('SECURE_ADMIN_HASH', securityHash_(next, newSalt));
+  CacheService.getScriptCache().remove('ADMIN:' + String(b.adminToken || ''));
+  return {success:true,message:'Administrator password changed. Please sign in again using your new password.'};
 }
