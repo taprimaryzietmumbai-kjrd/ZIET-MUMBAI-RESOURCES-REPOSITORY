@@ -15,7 +15,7 @@ const COORDINATORS = [
   'Dr. Rajesh Kumar Sharma - TA Library',
   'Anand Kr. Srivastava - TA (F&P)'
 ];
-const CATEGORIES = ['Course Module','Course Design','Concept Map','Course Report'];
+const CATEGORIES = ['Course Module','Course Design','Concept Map','Course Report','Additional Repositories'];
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const HEADERS = [
   'resourceId','workshopId','workshopName','day','date','session',
