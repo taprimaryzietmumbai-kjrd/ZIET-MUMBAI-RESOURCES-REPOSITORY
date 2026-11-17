@@ -271,23 +271,31 @@ const SECURE_SESSION_SECONDS = 6 * 60 * 60;
 const OTP_SECONDS = 5 * 60;
 
 function initializeSecurityAdmin() {
-  const ui = SpreadsheetApp.getUi();
-  const p1 = ui.prompt('Set Secure Repository Admin Password',
-    'Create a strong password (at least 12 characters). It will not be stored in plain text.',
-    ui.ButtonSet.OK_CANCEL);
-  if (p1.getSelectedButton() !== ui.Button.OK) return 'Setup cancelled.';
-  const password = p1.getResponseText();
-  if (!password || password.length < 12) throw new Error('Use a password of at least 12 characters.');
-  const p2 = ui.prompt('Confirm Admin Password', 'Enter the same password again.', ui.ButtonSet.OK_CANCEL);
-  if (p2.getSelectedButton() !== ui.Button.OK || p2.getResponseText() !== password)
-    throw new Error('Passwords did not match. Run setup again.');
   const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('SECURE_ADMIN_HASH')) {
+    throw new Error('Administrator is already configured. Do not rerun this setup unless you intend to reset the admin password.');
+  }
+  const password = Utilities.getUuid() + '-' + Utilities.getUuid();
   const salt = Utilities.getUuid() + Utilities.getUuid();
   props.setProperty('SECURE_ADMIN_SALT', salt);
   props.setProperty('SECURE_ADMIN_HASH', securityHash_(password, salt));
-  getSecurityRegister_();
-  getSecurityRequests_();
-  return 'Secure administrator configured. Keep the password private.';
+  const register = getSecurityRegister_();
+  const requests = getSecurityRequests_();
+  [register, requests].forEach(sh => {
+    sh.hideSheet();
+    const protection = sh.protect().setDescription('ZIET Secure Access — owner only');
+    protection.setWarningOnly(false);
+    const owner = Session.getEffectiveUser().getEmail();
+    if (owner) {
+      protection.getEditors().forEach(user => {
+        if (user.getEmail() !== owner) protection.removeEditor(user);
+      });
+      protection.addEditor(owner);
+    }
+    if (protection.canDomainEdit()) protection.setDomainEdit(false);
+  });
+  Logger.log('INITIAL ADMIN PASSWORD (copy and keep privately; it is shown only during this setup): ' + password);
+  return 'Administrator configured. Copy the INITIAL ADMIN PASSWORD from the execution log and keep it privately. Do not run this setup again.';
 }
 
 function handleSecureAction_(action, body) {
