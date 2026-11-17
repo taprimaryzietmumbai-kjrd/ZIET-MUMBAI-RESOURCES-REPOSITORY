@@ -1,25 +1,37 @@
 /**
- * ZIET Mumbai Workshop Resource Repository — Central API
+ * ZIET Mumbai Workshop Resource Repository — Central API + Google Drive Upload
  * Spreadsheet: 1zo-CnHZR5Pp88nCtwfuw5VSRfNi-vZcCJ2vlB6BE6hY
+ * Coordinator folders parent: 1BdsPAFk5CCVHP161h8DhF7_oLg3a2_4T
  * Deploy as Web App: Execute as Me; access Anyone.
  */
 const SPREADSHEET_ID = '1zo-CnHZR5Pp88nCtwfuw5VSRfNi-vZcCJ2vlB6BE6hY';
 const SHEET_NAME = 'Resources';
+const COORDINATOR_ROOT_ID = '1BdsPAFk5CCVHP161h8DhF7_oLg3a2_4T';
+const COORDINATORS = [
+  'Mrs. Seema Mishra - TA Economics',
+  'Mrs. Deepa Dilwari - TA English',
+  'Mr. Gajendra Kapde - TA Chemistry',
+  'Mr. Nilesh Thangan - TA Physics',
+  'Dr. Rajesh Kumar Sharma - TA Library',
+  'Anand Kr. Srivastava - TA (F&P)'
+];
+const CATEGORIES = ['Course Module','Course Design','Concept Map','Course Report'];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const HEADERS = [
   'resourceId','workshopId','workshopName','day','date','session',
   'title','resourceType','url','description','speaker','sourceApp',
-  'createdAt','updatedAt','status'
+  'createdAt','updatedAt','status','coordinator','driveFileId',
+  'driveFolderId','storageMode','fileName','mimeType'
 ];
 
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || 'list';
-  if (action === 'health') return json_({success:true,service:'ZIET Workshop Resource API',version:1});
+  if (action === 'health') return json_({success:true,service:'ZIET Workshop Resource API',version:2});
   if (action !== 'list') return json_({success:false,message:'Unsupported GET action'});
   const rows = readAll_();
-  // JSONP supports cross-origin reads from GitHub Pages without exposing credentials.
   const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
   const payload = {success:true,resources:rows};
-  if (callback && /^[A-Za-z_$][0-9A-Za-z_$\.]*$/.test(callback)) {
+  if (callback && /^[A-Za-z_$][0-9A-Za-z_$\\.]*$/.test(callback)) {
     return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
@@ -27,13 +39,13 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  let createdFile = null;
   try {
     let body = {};
     const raw = (e && e.postData && e.postData.contents) || '';
     if (raw) {
       try { body = JSON.parse(raw); }
       catch (jsonError) {
-        // HTML form POST is used by static GitHub Pages clients to avoid CORS preflight.
         const encoded = e && e.parameter && e.parameter.payload;
         if (encoded) body = JSON.parse(encoded);
         else throw jsonError;
@@ -42,6 +54,23 @@ function doPost(e) {
       body = JSON.parse(e.parameter.payload);
     }
     const action = String(body.action || '').toLowerCase();
+    if (action === 'upload') {
+      const resource = body.resource || body;
+      const uploaded = saveDriveUpload_(body, resource);
+      createdFile = uploaded.file;
+      const record = Object.assign({}, resource, {
+        url: uploaded.file.getUrl(),
+        driveFileId: uploaded.file.getId(),
+        driveFolderId: uploaded.folder.getId(),
+        storageMode: 'google-drive-upload',
+        fileName: uploaded.file.getName(),
+        mimeType: uploaded.file.getMimeType()
+      });
+      const saved = upsert_(record, body.sourceApp || 'central-repository');
+      return json_({success:true,resource:saved.resource,driveUrl:uploaded.file.getUrl(),
+        fileId:uploaded.file.getId(),folderId:uploaded.folder.getId(),
+        folderName:uploaded.folder.getName(),message:'File uploaded to Coordinator Google Drive folder and repository record saved'});
+    }
     if (action === 'upsert' || action === 'save') {
       const resource = body.resource || body;
       return json_(upsert_(resource, body.sourceApp || resource.sourceApp || 'unknown'));
@@ -54,8 +83,44 @@ function doPost(e) {
     if (action === 'list') return json_({success:true,resources:readAll_()});
     throw new Error('Unsupported action: ' + action);
   } catch (err) {
+    if (createdFile) {
+      try { createdFile.setTrashed(true); } catch (cleanupError) {}
+    }
     return json_({success:false,message:String(err && err.message || err)});
   }
+}
+
+function saveDriveUpload_(body, resource) {
+  if (!resource.workshopId) throw new Error('Select a workshop before uploading');
+  if (!resource.title) throw new Error('Document title is required');
+  if (COORDINATORS.indexOf(String(resource.coordinator || '')) === -1)
+    throw new Error('Select a valid Coordinator');
+  if (CATEGORIES.indexOf(String(resource.resourceType || '')) === -1)
+    throw new Error('Drive upload is available for Course Module, Course Design, Concept Map and Course Report');
+  const fileName = String(body.fileName || '').trim();
+  const base64 = String(body.fileBase64 || '');
+  if (!fileName || !base64) throw new Error('Choose a file to upload');
+  const bytes = Utilities.base64Decode(base64);
+  if (bytes.length > MAX_UPLOAD_BYTES) throw new Error('File exceeds the 10 MB upload limit');
+  if (!bytes.length) throw new Error('The selected file is empty');
+
+  const root = DriveApp.getFolderById(COORDINATOR_ROOT_ID);
+  const coordinatorFolder = getOrCreateChildFolder_(root, String(resource.coordinator));
+  const categoryFolder = getOrCreateChildFolder_(coordinatorFolder, String(resource.resourceType));
+  const mimeType = String(body.mimeType || 'application/octet-stream');
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  const file = categoryFolder.createFile(blob);
+  return {file:file,folder:categoryFolder};
+}
+
+function getOrCreateChildFolder_(parent, name) {
+  const folders = parent.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : parent.createFolder(name);
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function getSheet_() {
@@ -67,7 +132,7 @@ function getSheet_() {
     sh.setFrozenRows(1);
   } else {
     const current = sh.getRange(1,1,1,Math.max(sh.getLastColumn(),HEADERS.length)).getValues()[0];
-    HEADERS.forEach((h,i) => { if (current.indexOf(h) === -1) sh.getRange(1,sh.getLastColumn()+1).setValue(h); });
+    HEADERS.forEach(h => { if (current.indexOf(h) === -1) sh.getRange(1,sh.getLastColumn()+1).setValue(h); });
   }
   return sh;
 }
@@ -133,8 +198,4 @@ function softDelete_(resourceId, sourceApp) {
 
 function rowToObject_(headers,row) {
   const out={}; headers.forEach((h,i)=>out[h]=row[i]); return out;
-}
-function json_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
 }
