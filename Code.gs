@@ -5,6 +5,7 @@
  * Deploy as Web App: Execute as Me; access Anyone.
  */
 const SPREADSHEET_ID = '1zo-CnHZR5Pp88nCtwfuw5VSRfNi-vZcCJ2vlB6BE6hY';
+const SECONDARY_SPREADSHEET_ID = '1Aadm4x_qHczMzV6uF9F6NLYRbTy_pll1Ls2ncaguXzM';
 const SHEET_NAME = 'Resources';
 const COORDINATOR_ROOT_ID = '1BdsPAFk5CCVHP161h8DhF7_oLg3a2_4T';
 const COORDINATORS = [
@@ -147,7 +148,16 @@ function json_(obj) {
 }
 
 function getSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return getSheetFromSpreadsheet_(SPREADSHEET_ID);
+}
+
+// Creates/uses a Resources tab in the secondary reporting spreadsheet without changing other tabs.
+function getSecondarySheet_() {
+  return getSheetFromSpreadsheet_(SECONDARY_SPREADSHEET_ID);
+}
+
+function getSheetFromSpreadsheet_(spreadsheetId) {
+  const ss = SpreadsheetApp.openById(spreadsheetId);
   let sh = ss.getSheetByName(SHEET_NAME);
   if (!sh) sh = ss.insertSheet(SHEET_NAME);
   if (sh.getLastRow() === 0) {
@@ -181,44 +191,62 @@ function upsert_(input, sourceApp) {
   if (String(input.workshopTo) < String(input.workshopFrom)) throw new Error('Workshop To cannot be earlier than Workshop From');
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
-    const sh = getSheet_();
-    const data = sh.getDataRange().getValues();
-    const headers = data[0].map(String);
-    const idCol = headers.indexOf('resourceId');
-    let rowNum = -1;
-    for (let i=1;i<data.length;i++) if (String(data[i][idCol]) === String(input.resourceId)) { rowNum=i+1; break; }
     const now = new Date().toISOString();
-    const existing = rowNum > 0 ? rowToObject_(headers,data[rowNum-1]) : {};
-    const record = Object.assign({}, existing, input, {
-      sourceApp: sourceApp,
-      createdAt: existing.createdAt || input.createdAt || now,
-      updatedAt: now,
-      status: 'active'
-    });
-    const row = headers.map(h => record[h] !== undefined ? record[h] : '');
-    if (rowNum > 0) sh.getRange(rowNum,1,1,headers.length).setValues([row]);
-    else sh.appendRow(row);
-    return {success:true,resource:record,message:'Resource saved'};
+    const primary = upsertIntoSheet_(getSheet_(), input, sourceApp, now);
+    let secondary;
+    if (SECONDARY_SPREADSHEET_ID && SECONDARY_SPREADSHEET_ID !== SPREADSHEET_ID) {
+      secondary = upsertIntoSheet_(getSecondarySheet_(), input, sourceApp, now);
+    }
+    return {success:true,resource:primary,secondarySynced:!!secondary,
+      message: secondary ? 'Resource saved to both spreadsheets' : 'Resource saved'};
   } finally { lock.releaseLock(); }
+}
+
+function upsertIntoSheet_(sh, input, sourceApp, now) {
+  const data = sh.getDataRange().getValues();
+  const headers = data[0].map(String);
+  const idCol = headers.indexOf('resourceId');
+  let rowNum = -1;
+  for (let i=1;i<data.length;i++) if (String(data[i][idCol]) === String(input.resourceId)) { rowNum=i+1; break; }
+  const existing = rowNum > 0 ? rowToObject_(headers,data[rowNum-1]) : {};
+  const record = Object.assign({}, existing, input, {
+    sourceApp: sourceApp,
+    createdAt: existing.createdAt || input.createdAt || now,
+    updatedAt: now,
+    status: 'active'
+  });
+  const row = headers.map(h => record[h] !== undefined ? record[h] : '');
+  if (rowNum > 0) sh.getRange(rowNum,1,1,headers.length).setValues([row]);
+  else sh.appendRow(row);
+  return record;
 }
 
 function softDelete_(resourceId, sourceApp) {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
-    const sh = getSheet_(), data = sh.getDataRange().getValues(), headers = data[0].map(String);
-    const idCol = headers.indexOf('resourceId'), statusCol = headers.indexOf('status');
-    for (let i=1;i<data.length;i++) {
-      if (String(data[i][idCol]) === resourceId) {
-        sh.getRange(i+1,statusCol+1).setValue('deleted');
-        const updatedCol = headers.indexOf('updatedAt');
-        if (updatedCol >= 0) sh.getRange(i+1,updatedCol+1).setValue(new Date().toISOString());
-        const sourceCol = headers.indexOf('sourceApp');
-        if (sourceCol >= 0) sh.getRange(i+1,sourceCol+1).setValue(sourceApp);
-        return {success:true,resourceId:resourceId,status:'deleted'};
-      }
+    const primary = softDeleteInSheet_(getSheet_(), resourceId, sourceApp);
+    let secondary;
+    if (SECONDARY_SPREADSHEET_ID && SECONDARY_SPREADSHEET_ID !== SPREADSHEET_ID) {
+      secondary = softDeleteInSheet_(getSecondarySheet_(), resourceId, sourceApp);
     }
-    return {success:true,resourceId:resourceId,status:'deleted',message:'Record was already absent'};
+    return {success:true,resourceId:resourceId,status:'deleted',secondarySynced:!!secondary};
   } finally { lock.releaseLock(); }
+}
+
+function softDeleteInSheet_(sh, resourceId, sourceApp) {
+  const data = sh.getDataRange().getValues(), headers = data[0].map(String);
+  const idCol = headers.indexOf('resourceId'), statusCol = headers.indexOf('status');
+  for (let i=1;i<data.length;i++) {
+    if (String(data[i][idCol]) === resourceId) {
+      sh.getRange(i+1,statusCol+1).setValue('deleted');
+      const updatedCol = headers.indexOf('updatedAt');
+      if (updatedCol >= 0) sh.getRange(i+1,updatedCol+1).setValue(new Date().toISOString());
+      const sourceCol = headers.indexOf('sourceApp');
+      if (sourceCol >= 0) sh.getRange(i+1,sourceCol+1).setValue(sourceApp);
+      return true;
+    }
+  }
+  return false;
 }
 
 function rowToObject_(headers,row) {
