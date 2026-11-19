@@ -65,9 +65,29 @@ function buildWorkshops(){
  });
  const curated=STATIC_W.map(x=>({id:x.id,name:x.name,date:x.date,region:x.region,target:x.target,sourceWorkshopId:x.id,key:"static|"+x.id,items:[],curated:true}));
  const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+ const dateKey=v=>{
+  const t=String(v||"").toLowerCase();
+  const m=t.match(/(\\d{1,2})\\D+(\\d{1,2})\\D+(\\d{4})/);
+  if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+  const a=t.match(/(\\d{1,2})\\s*[-–to]+\\s*(\\d{1,2})\\s+([a-z]+)\\s+(\\d{4})/);
+  if(a){const months={january:"01",february:"02",march:"03",april:"04",may:"05",june:"06",july:"07",august:"08",september:"09",october:"10",november:"11",december:"12"};return a[4]+"-"+(months[a[3]]||"")+"-"+a[1].padStart(2,"0")+"_"+a[2].padStart(2,"0");}
+  return norm(t);
+ };
+ const sameEdition=(cur,live)=>{
+  if(norm(cur.name)!==norm(live.name))return false;
+  const cd=dateKey(cur.date),ld=dateKey(live.date);
+  if(cd&&ld&&cd!==ld)return false;
+  const c=norm(cur.target),l=norm(live.target);
+  if(!c||!l||c===l||l==="not specified")return true;
+  // Allow equivalent subject labels such as PRT (MUSIC) and PRT (MUS - PATNA),
+  // while keeping region-specific editions separate.
+  const subjectMatch=(c.includes("music")&&l.includes("mus"))||(c.includes("pr t")&&l.includes("prt"));
+  const regionMatch=!/ahmedabad|jaipur|mumbai|patna|raipur/.test(l)||l.includes(norm(cur.region).replace("region","").trim());
+  return subjectMatch&&regionMatch;
+ };
  W=curated;
  Array.from(groups.values()).forEach(live=>{
-  const match=W.find(cur=>norm(cur.name)===norm(live.name)&&(!cur.target||norm(cur.target)===norm(live.target)||norm(live.target)==="not specified"));
+  const match=W.find(cur=>sameEdition(cur,live));
   if(match){match.items.push(...live.items);match.liveKeys=(match.liveKeys||[]).concat(live.key);}
   else W.push({...live,liveKeys:[live.key],curated:false});
  });
