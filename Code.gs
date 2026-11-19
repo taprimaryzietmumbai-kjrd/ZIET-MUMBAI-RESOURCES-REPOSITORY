@@ -6,6 +6,8 @@
  */
 const SPREADSHEET_ID = '1zo-CnHZR5Pp88nCtwfuw5VSRfNi-vZcCJ2vlB6BE6hY';
 const SECONDARY_SPREADSHEET_ID = '1Aadm4x_qHczMzV6uF9F6NLYRbTy_pll1Ls2ncaguXzM';
+// Additional shared link sheet supplied for the public resource catalogue.
+const SHARED_LINKS_SPREADSHEET_ID = '13-PPbECN5gxTYnyCcdrorlKY7Xe880HC';
 const SHEET_NAME = 'Resources';
 const COORDINATOR_ROOT_ID = '1BdsPAFk5CCVHP161h8DhF7_oLg3a2_4T';
 const COORDINATORS = [
@@ -31,7 +33,7 @@ function doGet(e) {
   if (action !== 'list') return json_({success:false,message:'Unsupported GET action'});
   const rows = readAll_();
   const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
-  const payload = {success:true,resources:rows};
+  const payload = {success:true,resources:rows.concat(readSharedSheetLinks_())};
   if (callback && /^[A-Za-z_$][0-9A-Za-z_$\\.]*$/.test(callback)) {
     return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
@@ -85,7 +87,7 @@ function doPost(e) {
       if (!resourceId) throw new Error('resourceId is required');
       return json_(softDelete_(String(resourceId), body.sourceApp || 'unknown'));
     }
-    if (action === 'list') return json_({success:true,resources:readAll_()});
+    if (action === 'list') return json_({success:true,resources:readAll_().concat(readSharedSheetLinks_())});
     throw new Error('Unsupported action: ' + action);
   } catch (err) {
     if (createdFile) {
@@ -187,6 +189,58 @@ function readAll_() {
       ? Utilities.formatDate(row[i], Session.getScriptTimeZone(), 'yyyy-MM-dd') : row[i]);
     return obj;
   });
+}
+
+
+/**
+ * Read shared resource links directly from the additional Google Sheet.
+ * Uses the first visible tab and detects common heading variations automatically.
+ * This is read-only: the source spreadsheet is never modified.
+ */
+function readSharedSheetLinks_() {
+  try {
+    const ss = SpreadsheetApp.openById(SHARED_LINKS_SPREADSHEET_ID);
+    const sheets = ss.getSheets();
+    if (!sheets.length) return [];
+    // Prefer a tab whose name suggests resources or links; otherwise use the first tab.
+    const sh = sheets.find(s => /resource|link|repository/i.test(s.getName())) || sheets[0];
+    const values = sh.getDataRange().getDisplayValues();
+    if (values.length < 2) return [];
+    const norm = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const aliases = {
+      title:['title','resourcetitle','documenttitle','name','resourcename','topic'],
+      url:['url','link','resourcelink','documentlink','hyperlink','googlelink','filelink','weblink'],
+      type:['resourcetype','category','type','documenttype','resourcecategory'],
+      description:['description','details','remarks','note','purpose'],
+      workshop:['workshop','workshopname','program','programme','training','activity'],
+      date:['date','workshopdate','sessiondate'],
+      speaker:['speaker','resourceperson','facilitator','author']
+    };
+    let headerRow = -1, cols = {};
+    for (let r=0; r<Math.min(values.length,6); r++) {
+      const row = values[r].map(norm), found = {};
+      Object.keys(aliases).forEach(k => found[k] = row.findIndex(v => aliases[k].includes(v)));
+      if (found.url >= 0 && found.title >= 0) { headerRow=r; cols=found; break; }
+    }
+    if (headerRow < 0) throw new Error('Could not identify Title and Link columns in tab: ' + sh.getName());
+    const out=[];
+    for (let i=headerRow+1; i<values.length; i++) {
+      const row=values[i], title=String(row[cols.title] || '').trim(), url=String(row[cols.url] || '').trim();
+      if (!title || !/^https?:\/\//i.test(url)) continue;
+      const cell=(k)=>cols[k] >= 0 ? String(row[cols[k]] || '').trim() : '';
+      const id='SHARED-'+Utilities.base64EncodeWebSafe(title+'|'+url).replace(/=+$/,'').slice(0,32);
+      out.push({
+        resourceId:id, workshopId:'ZIET-SHARED-LINKS', workshopName:'Shared Sheet Resources',
+        title:title, url:url, resourceType:cell('type') || 'Additional Resource',
+        description:cell('description'), date:cell('date'), speaker:cell('speaker'),
+        sourceApp:'shared-links-sheet', status:'active'
+      });
+    }
+    return out;
+  } catch (err) {
+    console.error('Shared links sheet read failed: ' + err);
+    return [];
+  }
 }
 
 function upsert_(input, sourceApp) {
