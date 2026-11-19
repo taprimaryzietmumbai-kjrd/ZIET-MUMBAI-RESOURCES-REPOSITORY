@@ -105,10 +105,15 @@ function buildWorkshops(){
   if(cr&&lr&&cr!==lr)return false;
   const liveText=norm((live.region||"")+" "+(live.target||""));
   const curRegion=norm(cur.region);
-  const namedRegions=["ahmedabad","jaipur","mumbai","patna","raipur"];
-  const liveRegion=namedRegions.find(x=>liveText.includes(x));
-  // ZIET Mumbai denotes the venue, not a feeder-region edition.
-  const curatedRegion=namedRegions.find(x=>curRegion.includes(x));
+  const namedRegions=["ahmedabad","jaipur","patna","raipur"];
+  const regionOf=text=>{
+   const n=norm(text);
+   if(/kvs mumbai region|mumbai region/.test(n))return "mumbai";
+   return namedRegions.find(x=>n.includes(x))||"";
+  };
+  const liveRegion=regionOf(liveText);
+  // "ZIET Mumbai" is the venue; it must not be mistaken for KVS Mumbai Region.
+  const curatedRegion=regionOf(curRegion);
   if(curatedRegion&&liveRegion&&curatedRegion!==liveRegion)return false;
   if(curatedRegion&&!liveRegion&&live.sourceWorkshopId!==cur.id)return false;
   return true;
