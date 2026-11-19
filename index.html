@@ -102,7 +102,9 @@ function buildWorkshops(){
  const editionMatch=(cur,live)=>{
   // Dates are a hard boundary: an ID collision or stale ID must never attach
   // resources from a different edition of the same workshop.
-  // Stable exact workshop IDs override stale date metadata on older central records; curated dates remain authoritative.\n  if(live.sourceWorkshopId&&live.sourceWorkshopId===cur.id)return true;\n  const cd=startDate(cur.date),ld=startDate(live.date);
+  // Stable exact workshop IDs override stale date metadata on older central records; curated dates remain authoritative.
+  if(live.sourceWorkshopId&&live.sourceWorkshopId===cur.id)return true;
+  const cd=startDate(cur.date),ld=startDate(live.date);
   if(cd&&ld&&cd!==ld)return false;
   const cr=role(cur.target),lr=role(live.target);
   if(cr&&lr&&cr!==lr)return false;
