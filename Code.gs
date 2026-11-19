@@ -201,6 +201,8 @@ function mergeResourceLists_() {
   const merged = [];
   Array.prototype.forEach.call(arguments, list => {
     (list || []).forEach(item => {
+      const status = String(item.status || 'active').trim().toLowerCase();
+      if (['deleted','inactive','archived','trash'].includes(status)) return;
       const key = String(item.resourceId || [
         item.workshopId || '', item.title || '', item.url || ''
       ].join('|'));
@@ -232,47 +234,72 @@ function readAll_() {
  * This is read-only: the source spreadsheet is never modified.
  */
 function readSharedSheetLinks_() {
+  // Course Materials 2026: this sheet is a matrix, not a conventional
+  // Title/URL table. Headers are on row 3; resource hyperlinks are in G:I.
   try {
     const ss = SpreadsheetApp.openById(SHARED_LINKS_SPREADSHEET_ID);
-    const sheets = ss.getSheets();
-    if (!sheets.length) return [];
-    // Prefer a tab whose name suggests resources or links; otherwise use the first tab.
-    const sh = sheets.find(s => /resource|link|repository/i.test(s.getName())) || sheets[0];
-    const values = sh.getDataRange().getDisplayValues();
-    if (values.length < 2) return [];
-    const norm = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const aliases = {
-      title:['title','resourcetitle','documenttitle','name','resourcename','topic'],
-      url:['url','link','resourcelink','documentlink','hyperlink','googlelink','filelink','weblink'],
-      type:['resourcetype','category','type','documenttype','resourcecategory'],
-      description:['description','details','remarks','note','purpose'],
-      workshop:['workshop','workshopname','program','programme','training','activity'],
-      date:['date','workshopdate','sessiondate'],
-      speaker:['speaker','resourceperson','facilitator','author']
+    const sh = ss.getSheetById(1570640654) || ss.getSheets()[0];
+    if (!sh) return [];
+    const lastRow = sh.getLastRow();
+    if (lastRow < 4) return [];
+    const range = sh.getRange(4, 1, lastRow - 3, 9);
+    const values = range.getDisplayValues();
+    const rich = range.getRichTextValues();
+    const formulas = range.getFormulas();
+    const out = [];
+    const resourceColumns = [
+      {col:6, type:'Course Design'},
+      {col:7, type:'Course Report'},
+      {col:8, type:'Additional Resource'}
+    ];
+    const getUrl = (r, c) => {
+      const rt = rich[r][c];
+      if (rt) {
+        const direct = rt.getLinkUrl();
+        if (direct) return direct;
+        const runs = rt.getRuns ? rt.getRuns() : [];
+        for (let k=0; k<runs.length; k++) {
+          const u = runs[k].getLinkUrl();
+          if (u) return u;
+        }
+      }
+      const formula = String(formulas[r][c] || '');
+      const match = formula.match(/HYPERLINK\s*\(\s*"([^"]+)"/i);
+      if (match) return match[1];
+      const displayed = String(values[r][c] || '').trim();
+      return /^https?:\/\//i.test(displayed) ? displayed : '';
     };
-    let headerRow = -1, cols = {};
-    for (let r=0; r<Math.min(values.length,6); r++) {
-      const row = values[r].map(norm), found = {};
-      Object.keys(aliases).forEach(k => found[k] = row.findIndex(v => aliases[k].includes(v)));
-      if (found.url >= 0 && found.title >= 0) { headerRow=r; cols=found; break; }
-    }
-    if (headerRow < 0) throw new Error('Could not identify Title and Link columns in tab: ' + sh.getName());
-    const out=[];
-    for (let i=headerRow+1; i<values.length; i++) {
-      const row=values[i], title=String(row[cols.title] || '').trim(), url=String(row[cols.url] || '').trim();
-      if (!title || !/^https?:\/\//i.test(url)) continue;
-      const cell=(k)=>cols[k] >= 0 ? String(row[cols[k]] || '').trim() : '';
-      const id='SHARED-'+Utilities.base64EncodeWebSafe(title+'|'+url).replace(/=+$/,'').slice(0,32);
-      out.push({
-        resourceId:id, workshopId:'ZIET-SHARED-LINKS', workshopName:'Shared Sheet Resources',
-        title:title, url:url, resourceType:cell('type') || 'Additional Resource',
-        description:cell('description'), date:cell('date'), speaker:cell('speaker'),
-        sourceApp:'shared-links-sheet', status:'active'
+    const makeId = value => 'CM26-' +
+      Utilities.base64EncodeWebSafe(value).replace(/=+$/,'').slice(0,36);
+    values.forEach((row, i) => {
+      const workshopName = String(row[3] || '').trim();
+      if (!workshopName) return;
+      const date = String(row[2] || '').trim();
+      const targetGroup = String(row[4] || '').trim();
+      const coordinator = String(row[5] || '').trim();
+      const workshopKey = [workshopName,date,targetGroup].join('|');
+      resourceColumns.forEach(item => {
+        const url = getUrl(i, item.col);
+        if (!url) return;
+        const title = workshopName + ' — ' + item.type;
+        out.push({
+          resourceId: makeId(workshopKey + '|' + item.type + '|' + url),
+          workshopId: 'COURSE-MATERIALS-' + makeId(workshopKey).slice(0,20),
+          workshopName: workshopName,
+          day: '', date: date, session: '',
+          title: title, resourceType: item.type, url: url,
+          description: 'Automatically retrieved from Course Materials 2026 spreadsheet',
+          speaker: '', sourceApp: 'course-materials-sheet',
+          createdAt: '', updatedAt: '', status: 'active',
+          coordinator: coordinator, driveFileId: '', driveFolderId: '',
+          storageMode: 'spreadsheet-link', fileName: '', mimeType: '',
+          targetGroup: targetGroup, workshopFrom: '', workshopTo: ''
+        });
       });
-    }
+    });
     return out;
   } catch (err) {
-    console.error('Shared links sheet read failed: ' + err);
+    console.error('Course Materials 2026 read failed: ' + err);
     return [];
   }
 }
