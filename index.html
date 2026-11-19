@@ -57,40 +57,61 @@ function stableId(key){
 }
 function buildWorkshops(){
  const groups=new Map();
- records.filter(r=>r.status!=="deleted"&&r.workshopName&&r.url).forEach(r=>{
+ records.filter(r=>r.status!=="deleted"&&r.status!=="inactive"&&r.status!=="archived"&&r.workshopName&&r.url).forEach(r=>{
   const key=resourceGroupKey(r);
   if(!groups.has(key)) groups.set(key,{key,id:stableId(key),name:r.workshopName,date:r.date||((r.workshopFrom&&r.workshopTo)?r.workshopFrom+" to "+r.workshopTo:"Dates not specified"),region:r.region||r.targetGroup||"ZIET Mumbai",target:r.targetGroup||"Not specified",sourceWorkshopId:r.workshopId||"",items:[]});
   const w=groups.get(key);w.items.push(r);
   if(!w.sourceWorkshopId&&r.workshopId)w.sourceWorkshopId=r.workshopId;
  });
  const curated=STATIC_W.map(x=>({id:x.id,name:x.name,date:x.date,region:x.region,target:x.target,sourceWorkshopId:x.id,key:"static|"+x.id,items:[],curated:true}));
- const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
- const dateKey=v=>{
-  const t=String(v||"").toLowerCase();
-  const numeric=t.match(/(\d{1,2})\D+(\d{1,2})\D+(\d{4})/);
-  if(numeric)return numeric[3]+"-"+numeric[2].padStart(2,"0")+"-"+numeric[1].padStart(2,"0");
-  const named=t.match(/(\d{1,2})\s*[-–to]+\s*(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
-  if(named){const months={january:"01",february:"02",march:"03",april:"04",may:"05",june:"06",july:"07",august:"08",september:"09",october:"10",november:"11",december:"12"};return named[4]+"-"+(months[named[3]]||"")+"-"+named[1].padStart(2,"0");}
-  return norm(t);
+ const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\\s+/g," ");
+ const startDate=v=>{
+  const t=String(v||"").toLowerCase().replace(/,/g," ");
+  let m=t.match(/(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+  if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  m=t.match(/(\\d{1,2})[.\\/\\-](\\d{1,2})[.\\/\\-](\\d{4})/);
+  if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+  const months={jan:"01",january:"01",feb:"02",february:"02",mar:"03",march:"03",apr:"04",april:"04",may:"05",jun:"06",june:"06",jul:"07",july:"07",aug:"08",august:"08",sep:"09",sept:"09",september:"09",oct:"10",october:"10",nov:"11",november:"11",dec:"12",december:"12"};
+  m=t.match(/(\\d{1,2})\\s*(?:[-–]|to)\\s*(?:\\d{1,2})\\s+([a-z]+)\\s+(\\d{4})/);
+  if(m&&months[m[2]])return m[3]+"-"+months[m[2]]+"-"+m[1].padStart(2,"0");
+  m=t.match(/(\\d{1,2})\\s+([a-z]+)\\s+(\\d{4})/);
+  if(m&&months[m[2]])return m[3]+"-"+months[m[2]]+"-"+m[1].padStart(2,"0");
+  return "";
  };
- const sameEdition=(cur,live)=>{
+ const role=v=>{
+  const s=norm(v);
+  if(/music|mus/.test(s))return "music";
+  if(/librar/.test(s))return "librarian";
+  if(/art education|tgt ae/.test(s))return "art";
+  if(/principal|headmaster|hm/.test(s))return "leadership";
+  if(/primary|\\bprt\\b/.test(s))return "primary";
+  if(/\\btgt\\b/.test(s))return "tgt";
+  if(/\\bpgt\\b/.test(s))return "pgt";
+  return "";
+ };
+ const editionMatch=(cur,live)=>{
+  // A matching explicit workshop ID is authoritative, even if a spreadsheet
+  // row has incomplete or inconsistent display metadata.
+  if(live.sourceWorkshopId&&live.sourceWorkshopId===cur.id)return true;
   const cn=norm(cur.name),ln=norm(live.name);
-  // The curated catalogue may use a shortened display title; match it to
-  // the full title in Course Materials 2026 when one is a clear prefix.
   if(!(cn===ln||cn.startsWith(ln)||ln.startsWith(cn)))return false;
-  const cd=dateKey(cur.date),ld=dateKey(live.date);
+  const cd=startDate(cur.date),ld=startDate(live.date);
   if(cd&&ld&&cd!==ld)return false;
-  const c=norm(cur.target),l=norm(live.target);
-  if(!c||!l||c===l||l==="not specified")return true;
-  // Allow equivalent subject labels such as PRT (MUSIC) and PRT (MUS - PATNA),
-  // while keeping region-specific editions separate.
-  const subjectMatch=(c.includes("music")&&l.includes("mus"))||(c.includes("pr t")&&l.includes("prt"));
-  const regionMatch=!/ahmedabad|jaipur|mumbai|patna|raipur/.test(l)||l.includes(norm(cur.region).replace("region","").trim());
-  return subjectMatch&&regionMatch;
+  const cr=role(cur.target),lr=role(live.target);
+  if(cr&&lr&&cr!==lr)return false;
+  const liveText=norm((live.region||"")+" "+(live.target||""));
+  const curRegion=norm(cur.region);
+  const namedRegions=["ahmedabad","jaipur","mumbai","patna","raipur"];
+  const liveRegion=namedRegions.find(x=>liveText.includes(x));
+  // ZIET Mumbai denotes the venue, not a feeder-region edition.
+  const curatedRegion=namedRegions.find(x=>curRegion.includes(x));
+  if(curatedRegion&&liveRegion&&curatedRegion!==liveRegion)return false;
+  if(curatedRegion&&!liveRegion&&live.sourceWorkshopId!==cur.id)return false;
+  return true;
  };
  W=curated;
  Array.from(groups.values()).forEach(live=>{
-  const match=W.find(cur=>sameEdition(cur,live));
+  const match=W.find(cur=>editionMatch(cur,live));
   if(match){match.items.push(...live.items);match.liveKeys=(match.liveKeys||[]).concat(live.key);}
   else W.push({...live,liveKeys:[live.key],curated:false});
  });
