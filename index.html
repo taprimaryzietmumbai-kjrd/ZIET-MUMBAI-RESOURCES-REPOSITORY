@@ -94,11 +94,8 @@ function buildWorkshops(){
   return "";
  };
  const editionMatch=(cur,live)=>{
-  // A matching explicit workshop ID is authoritative, even if a spreadsheet
-  // row has incomplete or inconsistent display metadata.
-  if(live.sourceWorkshopId&&live.sourceWorkshopId===cur.id)return true;
-  const cn=norm(cur.name),ln=norm(live.name);
-  if(!(cn===ln||cn.startsWith(ln)||ln.startsWith(cn)))return false;
+  // Dates are a hard boundary: an ID collision or stale ID must never attach
+  // resources from a different edition of the same workshop.
   const cd=startDate(cur.date),ld=startDate(live.date);
   if(cd&&ld&&cd!==ld)return false;
   const cr=role(cur.target),lr=role(live.target);
@@ -116,7 +113,10 @@ function buildWorkshops(){
   const curatedRegion=regionOf(curRegion);
   if(curatedRegion&&liveRegion&&curatedRegion!==liveRegion)return false;
   if(curatedRegion&&!liveRegion&&live.sourceWorkshopId!==cur.id)return false;
-  return true;
+  // Explicit IDs are useful only after date, role and region consistency checks.
+  if(live.sourceWorkshopId&&live.sourceWorkshopId===cur.id)return true;
+  const cn=norm(cur.name),ln=norm(live.name);
+  return cn===ln||cn.startsWith(ln)||ln.startsWith(cn);
  };
  W=curated;
  Array.from(groups.values()).forEach(live=>{
