@@ -74,7 +74,10 @@ function buildWorkshops(){
   return norm(t);
  };
  const sameEdition=(cur,live)=>{
-  if(norm(cur.name)!==norm(live.name))return false;
+  const cn=norm(cur.name),ln=norm(live.name);
+  // The curated catalogue may use a shortened display title; match it to
+  // the full title in Course Materials 2026 when one is a clear prefix.
+  if(!(cn===ln||cn.startsWith(ln)||ln.startsWith(cn)))return false;
   const cd=dateKey(cur.date),ld=dateKey(live.date);
   if(cd&&ld&&cd!==ld)return false;
   const c=norm(cur.target),l=norm(live.target);
