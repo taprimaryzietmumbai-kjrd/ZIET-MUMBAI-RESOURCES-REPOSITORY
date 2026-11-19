@@ -42,7 +42,7 @@ let W=[];
 const DOCS=["Course Module","Course Design","Concept Map","Course Report"],$=id=>document.getElementById(id);let records=[],editingResourceId=null;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const typeOf=r=>r.resourceType||r.documentType||"Additional Resource";
-const normKey=v=>String(v||"").toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
+const normKey=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 function resourceGroupKey(r){
  if(String(r.sourceApp||"")==="course-materials-sheet"){
   return "course|"+[r.workshopName,r.date,r.targetGroup].map(normKey).join("|");
