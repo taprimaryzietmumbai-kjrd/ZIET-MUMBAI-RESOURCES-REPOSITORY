@@ -66,15 +66,19 @@ function buildWorkshops(){
  const curated=STATIC_W.map(x=>({id:x.id,name:x.name,date:x.date,region:x.region,target:x.target,sourceWorkshopId:x.id,key:"static|"+x.id,items:[],curated:true}));
  const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");
  const startDate=v=>{
-  const t=String(v||"").toLowerCase().replace(/,/g," ");
-  let m=t.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
-  m=t.match(/(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})/);
-  if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+  const t=String(v||"").toLowerCase().replace(/,/g," ").replace(/\\s+/g," ").trim();
   const months={jan:"01",january:"01",feb:"02",february:"02",mar:"03",march:"03",apr:"04",april:"04",may:"05",jun:"06",june:"06",jul:"07",july:"07",aug:"08",august:"08",sep:"09",sept:"09",september:"09",oct:"10",october:"10",nov:"11",november:"11",dec:"12",december:"12"};
-  m=t.match(/(\d{1,2})\s*(?:[-–]|to)\s*(?:\d{1,2})\s+([a-z]+)\s+(\d{4})/);
-  if(m&&months[m[2]])return m[3]+"-"+months[m[2]]+"-"+m[1].padStart(2,"0");
-  m=t.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
+  let m=t.match(/(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+  if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  m=t.match(/(\\d{1,2})[.\\/\\-](\\d{1,2})[.\\/\\-](\\d{4})/);
+  if(m)return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+  // Cross-month ranges, e.g. 27 September–01 October 2026.
+  m=t.match(/(\\d{1,2})\\s+([a-z]+)\\s*(?:[-–]|to)\\s*(\\d{1,2})\\s+([a-z]+)\\s+(\\d{4})/);
+  if(m&&months[m[2]]&&months[m[4]])return m[5]+"-"+months[m[2]]+"-"+m[1].padStart(2,"0");
+  // Same-month ranges, e.g. 27-30 April 2026.
+  m=t.match(/(\\d{1,2})\\s*(?:[-–]|to)\\s*(\\d{1,2})\\s+([a-z]+)\\s+(\\d{4})/);
+  if(m&&months[m[3]])return m[4]+"-"+months[m[3]]+"-"+m[1].padStart(2,"0");
+  m=t.match(/(\\d{1,2})\\s+([a-z]+)\\s+(\\d{4})/);
   if(m&&months[m[2]])return m[3]+"-"+months[m[2]]+"-"+m[1].padStart(2,"0");
   return "";
  };
