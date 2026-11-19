@@ -259,7 +259,7 @@ function readSharedSheetLinks_() {
 
     const extractUrl = (value) => {
       const text = String(value || '').trim();
-      const match = text.match(/https?:\\/\\/[^\\s"'<>),;]+/i);
+      const match = text.match(/https?:\/\/[^\s"'<>),;]+/i);
       return match ? match[0].replace(/[.]$/, '') : '';
     };
     const getUrl = (r, c) => {
