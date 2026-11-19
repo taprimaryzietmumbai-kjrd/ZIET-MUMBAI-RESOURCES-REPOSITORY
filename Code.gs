@@ -33,7 +33,7 @@ function doGet(e) {
   if (action !== 'list') return json_({success:false,message:'Unsupported GET action'});
   const rows = readAll_();
   const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
-  const payload = {success:true,resources:rows.concat(readSharedSheetLinks_())};
+  const payload = {success:true,resources:mergeResourceLists_(rows,readSecondaryAll_(),readSharedSheetLinks_())};
   if (callback && /^[A-Za-z_$][0-9A-Za-z_$\\.]*$/.test(callback)) {
     return ContentService.createTextOutput(callback + '(' + JSON.stringify(payload) + ');')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
@@ -83,7 +83,7 @@ function doPost(e) {
       if (!resourceId) throw new Error('resourceId is required');
       return json_(softDelete_(String(resourceId), body.sourceApp || 'unknown'));
     }
-    if (action === 'list') return json_({success:true,resources:readAll_().concat(readSharedSheetLinks_())});
+    if (action === 'list') return json_({success:true,resources:mergeResourceLists_(readAll_(),readSecondaryAll_(),readSharedSheetLinks_())});
     throw new Error('Unsupported action: ' + action);
   } catch (err) {
     if (createdFile) {
@@ -172,6 +172,44 @@ function getSheetFromSpreadsheet_(spreadsheetId) {
     HEADERS.forEach(h => { if (current.indexOf(h) === -1) sh.getRange(1,sh.getLastColumn()+1).setValue(h); });
   }
   return sh;
+}
+
+// Read the Resource Compendium as a second live source for the public catalogue.
+function readSecondaryAll_() {
+  const ss = SpreadsheetApp.openById(SECONDARY_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) return [];
+  return readRowsFromSheet_(sh);
+}
+
+// Convert a Resources tab into API records using its header row.
+function readRowsFromSheet_(sh) {
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(String);
+  return values.slice(1).filter(row => row.some(v => v !== '')).map(row => {
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = row[i] instanceof Date
+      ? Utilities.formatDate(row[i], Session.getScriptTimeZone(), 'yyyy-MM-dd') : row[i]);
+    return obj;
+  });
+}
+
+// Merge the three sources while avoiding duplicate resource IDs across mirrored sheets.
+function mergeResourceLists_() {
+  const seen = {};
+  const merged = [];
+  Array.prototype.forEach.call(arguments, list => {
+    (list || []).forEach(item => {
+      const key = String(item.resourceId || [
+        item.workshopId || '', item.title || '', item.url || ''
+      ].join('|'));
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push(item);
+    });
+  });
+  return merged;
 }
 
 function readAll_() {
