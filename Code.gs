@@ -234,16 +234,20 @@ function readAll_() {
  * This is read-only: the source spreadsheet is never modified.
  */
 function readSharedSheetLinks_() {
-  // Course Materials 2026: this sheet is a matrix, not a conventional
-  // Title/URL table. Headers are on row 3; resource hyperlinks are in G:I.
+  // Course Materials 2026 is a matrix: data begins on row 4 and the three
+  // resource hyperlinks are in columns G, H and I.
   try {
     const ss = SpreadsheetApp.openById(SHARED_LINKS_SPREADSHEET_ID);
     const sh = ss.getSheetById(1570640654) || ss.getSheets()[0];
     if (!sh) return [];
     const lastRow = sh.getLastRow();
     if (lastRow < 4) return [];
+
+    // Read the complete source rows once. Rich text, formulas and displayed
+    // values are all inspected because Sheets stores links in several ways.
     const range = sh.getRange(4, 1, lastRow - 3, 9);
     const values = range.getDisplayValues();
+    const rawValues = range.getValues();
     const rich = range.getRichTextValues();
     const formulas = range.getFormulas();
     const out = [];
@@ -252,48 +256,56 @@ function readSharedSheetLinks_() {
       {col:7, type:'Course Report'},
       {col:8, type:'Additional Resource'}
     ];
+
+    const extractUrl = (value) => {
+      const text = String(value || '').trim();
+      const match = text.match(/https?:\\/\\/[^\\s"'<>),;]+/i);
+      return match ? match[0].replace(/[.]$/, '') : '';
+    };
     const getUrl = (r, c) => {
-      const rt = rich[r][c];
+      const rt = rich[r] && rich[r][c];
       if (rt) {
-        const direct = rt.getLinkUrl();
+        const direct = rt.getLinkUrl && rt.getLinkUrl();
         if (direct) return direct;
         const runs = rt.getRuns ? rt.getRuns() : [];
-        for (let k=0; k<runs.length; k++) {
-          const u = runs[k].getLinkUrl();
+        for (let k = 0; k < runs.length; k++) {
+          const u = runs[k].getLinkUrl && runs[k].getLinkUrl();
           if (u) return u;
         }
       }
-      const formula = String(formulas[r][c] || '');
-      const match = formula.match(/HYPERLINK\s*\(\s*"([^"]+)"/i);
-      if (match) return match[1];
-      const displayed = String(values[r][c] || '').trim();
-      return /^https?:\/\//i.test(displayed) ? displayed : '';
+      const formula = String((formulas[r] && formulas[r][c]) || '');
+      const formulaUrl = extractUrl(formula);
+      if (formulaUrl) return formulaUrl;
+      const raw = rawValues[r] && rawValues[r][c];
+      const rawUrl = extractUrl(raw);
+      if (rawUrl) return rawUrl;
+      return extractUrl(values[r] && values[r][c]);
     };
-    const makeId = value => 'CM26-' +
-      Utilities.base64EncodeWebSafe(value).replace(/=+$/,'').slice(0,36);
+
     values.forEach((row, i) => {
       const workshopName = String(row[3] || '').trim();
       if (!workshopName) return;
       const date = String(row[2] || '').trim();
       const targetGroup = String(row[4] || '').trim();
       const coordinator = String(row[5] || '').trim();
-      const workshopKey = [workshopName,date,targetGroup].join('|');
+      const workshopKey = [workshopName, date, targetGroup].join('|');
       resourceColumns.forEach(item => {
         const url = getUrl(i, item.col);
         if (!url) return;
         const title = workshopName + ' — ' + item.type;
         out.push({
-          resourceId: makeId(workshopKey + '|' + item.type + '|' + url),
-          workshopId: 'COURSE-MATERIALS-' + makeId(workshopKey).slice(0,20),
+          resourceId: 'CM26-' + Utilities.base64EncodeWebSafe(workshopKey + '|' + item.type + '|' + url).replace(/=+$/,'').slice(0,36),
+          workshopId: 'COURSE-MATERIALS-' + Utilities.base64EncodeWebSafe(workshopKey).replace(/=+$/,'').slice(0,20),
           workshopName: workshopName,
           day: '', date: date, session: '',
           title: title, resourceType: item.type, url: url,
-          description: 'Automatically retrieved from Course Materials 2026 spreadsheet',
+          description: 'Automatically retrieved from Course Materials 2026 spreadsheet (row ' + (i + 4) + ')',
           speaker: '', sourceApp: 'course-materials-sheet',
           createdAt: '', updatedAt: '', status: 'active',
           coordinator: coordinator, driveFileId: '', driveFolderId: '',
           storageMode: 'spreadsheet-link', fileName: '', mimeType: '',
-          targetGroup: targetGroup, workshopFrom: '', workshopTo: ''
+          targetGroup: targetGroup, workshopFrom: '', workshopTo: '',
+          sourceSheetId: 1570640654, sourceRow: i + 4, sourceColumn: item.col + 1
         });
       });
     });
